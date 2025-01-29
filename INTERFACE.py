@@ -44,7 +44,18 @@ def show_home():
             st.rerun()
     
 def show_analyse():
-    st.markdown("""<h1 style='text-align: center;'>📈 Analyse GPS/Vidéo</h1>""", unsafe_allow_html=True)
+    st.markdown("""<h1 style='text-align: center;'>📈 Analyse GPS/Vidéo</h1>""",
+                        """
+        <style>
+        /* Agrandir les boutons */
+        .stButton>button {
+            font-size: 50px !important;  /* Taille du texte */
+            font-weight: bold !important; /* Texte en gras */
+            padding: 40px !important;  /* Espace interne du bouton */
+            }
+        </style>
+        """,
+                unsafe_allow_html=True)
     
     col1, col2 = st.columns([0.15, 0.85])
     with col1:
