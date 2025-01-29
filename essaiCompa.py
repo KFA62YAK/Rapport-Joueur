@@ -53,9 +53,6 @@ def load_excel(key_prefix):
             positions = excel_data.parse("Poste")
             constante_data = excel_data.parse("Constante")
 
-            st.success("Fichier chargé avec succès")
-            st.write(f"Aperçu des données chargées ({key_prefix}):")
-            st.write(data.head())
             return data, positions, constante_data
         except Exception as e:
             st.error(f"Erreur lors du chargement du fichier ({key_prefix}) : {e}")
@@ -86,7 +83,7 @@ def display_column(key_prefix, shared_graphs):
     data, positions, constante_data = load_excel(key_prefix)
 
     if data is not None:
-        st.write(f"Données disponibles. Sélectionner un joueur ({key_prefix}):")
+        st.write(f"Sélectionner un joueur ({key_prefix}):")
         players = data["Joueur"].drop_duplicates().tolist()
         selected_player = st.selectbox(
             f"Sélectionner un joueur/joueuse ({key_prefix})", 
