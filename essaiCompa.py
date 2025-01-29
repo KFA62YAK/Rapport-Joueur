@@ -38,7 +38,7 @@ st.markdown(
 # Fonction pour charger et filtrer les données Excel
 def load_excel(key_prefix):
     uploaded_file = st.file_uploader(
-        f"Charger un fichier Excel ({key_prefix})", 
+        f"Charger un fichier Excel ", 
         type=["xls", "xlsx", "xlsm"], 
         key=f"{key_prefix}_file_uploader"
     )
@@ -57,7 +57,7 @@ def load_excel(key_prefix):
         except Exception as e:
             st.error(f"Erreur lors du chargement du fichier ({key_prefix}) : {e}")
     else:
-        st.warning(f"Veuillez charger un fichier Excel ({key_prefix}).")
+        st.warning(f"Veuillez charger un fichier Excel .")
     return None, None, None
 
 def filter_duration(player_data, min_duration=3900):
