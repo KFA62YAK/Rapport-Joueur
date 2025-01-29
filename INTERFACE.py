@@ -5,20 +5,6 @@ import os
 
 def main():
     st.set_page_config(page_title="Pôle Liévin", page_icon="⚽", layout="wide")
-    st.markdown(
-        """
-        <style>
-        /* Agrandir les boutons */
-        .stButton>button {
-            font-size: 50px !important;  /* Taille du texte */
-            font-weight: bold !important; /* Texte en gras */
-            padding: 40px !important;  /* Espace interne du bouton */
-            }
-        </style>
-        """,
-        unsafe_allow_html=True
-        )
-    
     # Session state for animations
     if 'page' not in st.session_state:
         st.session_state.page = "home"
@@ -31,7 +17,18 @@ def main():
         show_comparaison()
         
 def show_home():
-    st.markdown("""<h1 style='text-align: center;'>⚽ Pôle Liévin</h1>""", unsafe_allow_html=True)
+    st.markdown("""<h1 style='text-align: center;'>⚽ Pôle Liévin</h1>""", 
+                        """
+        <style>
+        /* Agrandir les boutons */
+        .stButton>button {
+            font-size: 50px !important;  /* Taille du texte */
+            font-weight: bold !important; /* Texte en gras */
+            padding: 40px !important;  /* Espace interne du bouton */
+            }
+        </style>
+        """
+                ,unsafe_allow_html=True)
     
     col1, col2 = st.columns([1,1])
     with col1:
@@ -44,18 +41,7 @@ def show_home():
             st.rerun()
     
 def show_analyse():
-    st.markdown("""<h1 style='text-align: center;'>📈 Analyse GPS/Vidéo</h1>""",
-                        """
-        <style>
-        /* Agrandir les boutons */
-        .stButton>button {
-            font-size: 50px !important;  /* Taille du texte */
-            font-weight: bold !important; /* Texte en gras */
-            padding: 40px !important;  /* Espace interne du bouton */
-            }
-        </style>
-        """,
-                unsafe_allow_html=True)
+    st.markdown("""<h1 style='text-align: center;'>📈 Analyse GPS/Vidéo</h1>""", unsafe_allow_html=True)
     
     col1, col2 = st.columns([0.15, 0.85])
     with col1:
