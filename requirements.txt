@@ -1,7 +1,6 @@
 ﻿streamlit
 pandas
 numpy
-os
 matplotlib
 fpdf
 pillow
