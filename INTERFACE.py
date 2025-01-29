@@ -84,8 +84,6 @@ def show_comparaison():
 
             # Vérification si le fichier existe
         if os.path.exists(script_path):
-            st.success(f"Le fichier a été trouvé : {script_path}")
-            st.write("Le script est en cours d'exécution...")
 
             try:
                 # Lire le contenu du fichier avec un encodage explicite
