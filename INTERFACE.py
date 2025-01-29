@@ -77,9 +77,6 @@ def show_comparaison():
             st.rerun()
     
     with col2:
-        st.write("Analyse des performances des joueurs en cours...")
-        time.sleep(1)
-        st.success("Comparaison terminée !")
 
     # Chemin du fichier à exécuter
         script_path = os.path.join(os.path.dirname(__file__), "essaiCompa.py")
