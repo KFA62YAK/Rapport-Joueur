@@ -5,7 +5,7 @@ import os
 
 def main():
     st.set_page_config(page_title="Pôle Liévin", page_icon="⚽", layout="wide")
-        st.markdown(
+    st.markdown(
         """
         <style>
         /* Agrandir les boutons */
