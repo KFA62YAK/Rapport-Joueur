@@ -10,9 +10,9 @@ def main():
         <style>
         /* Agrandir les boutons */
         .stButton>button {
-            font-size: 24px !important;  /* Taille du texte */
+            font-size: 50px !important;  /* Taille du texte */
             font-weight: bold !important; /* Texte en gras */
-            padding: 20px !important;  /* Espace interne du bouton */
+            padding: 40px !important;  /* Espace interne du bouton */
             }
         </style>
         """,
