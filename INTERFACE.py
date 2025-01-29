@@ -2,20 +2,7 @@ import streamlit as st
 import time
 import os
 
-st.markdown(
-    """
-    <style>
-    /* Agrandir les boutons */
-    .stButton>button {
-        font-size: 24px !important;  /* Taille du texte */
-        font-weight: bold !important; /* Texte en gras */
-        padding: 20px !important;  /* Espace interne du bouton */
-        width: 100% !important;  /* Largeur étendue */
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+
 def main():
     st.set_page_config(page_title="Pôle Liévin", page_icon="⚽", layout="wide")
     
