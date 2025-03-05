@@ -6,3 +6,4 @@ scipy
 matplotlib
 fpdf
 pillow
+plotly.express
