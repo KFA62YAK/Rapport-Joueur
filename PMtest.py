@@ -1,7 +1,10 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+import tempfile
+import os
 
 def get_masculine_constants(constante_data):
     """Extrait les constantes spécifiques au pôle masculin à partir d'une feuille Excel."""
@@ -32,8 +35,10 @@ def compute_additional_columns(player_data):
     if "Distance16" in player_data.columns and "Durée" in player_data.columns:
         player_data["Distance>16kmh/min"] = player_data["Distance16"] / (player_data["Durée"].replace(0, 1) / 60)
 
-    if all(col in player_data.columns for col in ["Nb Acc2>3m/s²", "Nb Acc3>4m/s²", "Nb Acc>4m/s²", "Nb Dec2>3m/s²", "Nb Dec3>4m/s²", "Nb Dec>4m/s²"]):
-        player_data["Nb Acc/Dec > 2m/s²"] = player_data[["Nb Acc2>3m/s²", "Nb Acc3>4m/s²", "Nb Acc>4m/s²", "Nb Dec2>3m/s²", "Nb Dec3>4m/s²", "Nb Dec>4m/s²"]].sum(axis=1)
+    if all(col in player_data.columns for col in ["Nb Acc2>3m/s²", "Nb Acc3>4m/s²", "Nb Acc>4m/s²", 
+                                                   "Nb Dec2>3m/s²", "Nb Dec3>4m/s²", "Nb Dec>4m/s²"]):
+        player_data["Nb Acc/Dec > 2m/s²"] = player_data[["Nb Acc2>3m/s²", "Nb Acc3>4m/s²", "Nb Acc>4m/s²", 
+                                                         "Nb Dec2>3m/s²", "Nb Dec3>4m/s²", "Nb Dec>4m/s²"]].sum(axis=1)
 
     if "Nb Acc/Dec > 2m/s²" in player_data.columns and "Durée" in player_data.columns:
         player_data["Nb Acc/Dec > 2m/s²/min"] = player_data["Nb Acc/Dec > 2m/s²"].fillna(0) / (player_data["Durée"].replace(0, 1) / 60)
@@ -47,10 +52,11 @@ def compute_additional_columns(player_data):
     return player_data
 
 def plot_masculine_graph(selected_graph, player_name, constants, data, positions):
-    """Affiche les graphiques masculins pour un joueur donné."""
+    """Affiche les graphiques masculins pour un joueur donné en utilisant Plotly Express."""
     player_data = data[data["Joueur"] == player_name].copy()
     player_data = compute_additional_columns(player_data)
 
+    # Diagramme empilé
     if selected_graph == "Diagramme empilé":
         if all(col in data.columns for col in ["Distance16%", "Distance20%", "Distance%"]):
             sessions = data["Session Title"].fillna("Session inconnue")
@@ -65,68 +71,82 @@ def plot_masculine_graph(selected_graph, player_name, constants, data, positions
                 constant16 = constants.get("Distance16%", {}).get(position, 0)
                 constant = constants.get("Distance%", {}).get(position, 0)
 
-                fig, ax = plt.subplots(figsize=(10, 6))
+                # Préparation des données pour la barre constante
+                df_constante = pd.DataFrame({
+                    'Session': ['Constante U15']*3,
+                    'Type': ['Distance>20', 'Distance>16', 'Distance<16'],
+                    'Valeur': [constant20, constant16, constant]
+                })
 
-                # Barre "Constante U15"
-                bar1 = ax.bar("Constante U15", constant20, color="cyan")
-                bar2 = ax.bar("Constante U15", constant16, bottom=constant20, color="orange")
-                bar3 = ax.bar("Constante U15", constant, bottom=constant20 + constant16, color="green")
+                # Préparation des données pour les sessions
+                df_sessions = pd.DataFrame({
+                    'Session': sessions,
+                    'Distance>20': distance20,
+                    'Distance>16': distance16,
+                    'Distance<16': distance
+                })
+                df_sessions_long = df_sessions.melt(id_vars="Session", value_vars=['Distance>20', 'Distance>16', 'Distance<16'], 
+                                                      var_name='Type', value_name='Valeur')
+                df_combined = pd.concat([df_constante, df_sessions_long], ignore_index=True)
 
-                # Ajouter des étiquettes pour la barre "Constante U15"
-                for rect in bar1 + bar2 + bar3:
-                    height = rect.get_height()
-                    ax.text(rect.get_x() + rect.get_width() / 2.0, rect.get_y() + height / 2.0, f'{height:.1f}', ha='center', va='center')
-
-                # Barres pour chaque session
-                bar4 = ax.bar(sessions, distance20, label="Distance>20", color="cyan")
-                bar5 = ax.bar(sessions, distance16, bottom=distance20, label="Distance>16", color="orange")
-                bar6 = ax.bar(sessions, distance, bottom=distance20 + distance16, label="Distance<16", color="green")
-
-                # Ajouter des étiquettes pour les barres de sessions
-                for bar_set in (bar4, bar5, bar6):
-                    for rect in bar_set:
-                        height = rect.get_height()
-                        ax.text(rect.get_x() + rect.get_width() / 2.0, rect.get_y() + height / 2.0, f'{height:.1f}', ha='center', va='center')
-
-                ax.set_title("Répartition de courses en %")
-                ax.set_xlabel("Match")
-                ax.set_ylabel("Distance (%)")
-                ax.legend()
-                plt.xticks(rotation=45)
-
+                fig = px.bar(df_combined, x='Session', y='Valeur', color='Type', barmode='stack', text_auto=True,
+                             title="Répartition de courses en %")
+                fig.update_layout(xaxis_title="Match", yaxis_title="Distance (%)", xaxis_tickangle=45)
                 return fig
         else:
             st.warning("Les colonnes Distance16%, Distance20%, et Distance% sont manquantes dans les données.")
             return None
 
+    # Cas des graphiques en courbe (avec régression et ligne constante)
     if selected_graph in player_data.columns:
-        # Remplacer les valeurs nulles par zéro
         player_data[selected_graph] = player_data[selected_graph].fillna(0)
 
-        fig, ax = plt.subplots(figsize=(8, 6))
-        ax.plot(player_data["Session Title"], player_data[selected_graph], marker="o",color="green", label=selected_graph)
-        # Préparation des données pour la régression
+        # Création d'une figure vide pour pouvoir ajouter des traces avec leurs légendes
+        fig = go.Figure()
+
+        # Trace principale : données du joueur
+        fig.add_trace(go.Scatter(
+            x=player_data["Session Title"],
+            y=player_data[selected_graph],
+            mode="lines+markers",
+            name=selected_graph,
+            line=dict(color="blue")
+        ))
+
+        # Calcul de la régression linéaire
         x = np.arange(len(player_data["Session Title"]))
         y = player_data[selected_graph].values
-
-        # Calcul de la régression linéaire (pente et intercept)
         slope, intercept = np.polyfit(x, y, 1)
         regression_line = slope * x + intercept
 
-        # Tracer la droite de régression
-        ax.plot(player_data["Session Title"], regression_line, color="navy", linestyle="-", label="Progression générale")
+        # Trace de la régression linéaire
+        fig.add_trace(go.Scatter(
+            x=player_data["Session Title"],
+            y=regression_line,
+            mode="lines",
+            name="Progression générale",
+            line=dict(color="navy")
+        ))
 
-
+        # Trace de la ligne constante si disponible
         position_row = positions[positions["Joueur"] == player_name]
         if not position_row.empty:
             position = position_row.iloc[0]["Poste"]
-            constant = constants.get(selected_graph, {}).get(position)
-            if constant is not None:
-                ax.axhline(y=constant, color="red", linestyle="--", label=f"U15 National")
-        ax.set_title(f"{selected_graph} {player_name}")
-        ax.set_xlabel("Session")
-        ax.set_ylabel("Valeur")
-        ax.legend()
+            constant_val = constants.get(selected_graph, {}).get(position)
+            if constant_val is not None:
+                fig.add_trace(go.Scatter(
+                    x=[player_data["Session Title"].iloc[0], player_data["Session Title"].iloc[-1]],
+                    y=[constant_val, constant_val],
+                    mode="lines",
+                    name="U15 National",
+                    line=dict(color="red", dash="dash")
+                ))
+        fig.update_layout(
+            title=f"{selected_graph} - {player_name}",
+            xaxis_title="Session",
+            yaxis_title="Valeur",
+            xaxis_tickangle=45
+        )
         return fig
     else:
         st.warning(f"Données manquantes ou non disponibles pour le graphique : {selected_graph}")
@@ -147,6 +167,8 @@ def load_excel():
             constante_data = excel_data.parse("Constante")
 
             st.success("Fichier chargé avec succès")
+            st.write("Aperçu des données chargées:")
+            st.write(data.head())
             return data, positions, constante_data
         except Exception as e:
             st.error(f"Erreur lors du chargement du fichier : {e}")
@@ -155,12 +177,14 @@ def load_excel():
     return None, None, None
 
 def display_selected_graphs(selected_graphs, player_name, constants, player_data, positions):
-    """Affiche les graphiques de manière interactive pour un joueur."""
+    """Affiche les graphiques de manière interactive pour un joueur en utilisant Plotly."""
     for graph in selected_graphs:
         st.subheader(f"Graphique : {graph}")
         fig = plot_masculine_graph(graph, player_name, constants, player_data, positions)
         if fig:
-            st.pyplot(fig)
+            st.plotly_chart(fig)
+        else:
+            st.error(f"Graphique {graph} non disponible.")
 
 def main():
     st.title("Analyse des Performances des Joueurs Masculins")
@@ -186,8 +210,8 @@ def main():
                 "Distance > 16km/h",
                 "Distance > 20km/h",
                 "TopSpeed",
-                "Total Acc > 2m/s²",
-                "Total Dec > 2m/s²",
+                "Nb Acc/Dec > 2m/s²",
+                "Nb Acc/Dec > 4m/s²",
                 "Diagramme empilé"
             ]
 
@@ -201,13 +225,13 @@ def main():
 
             selected_graph = st.selectbox("Choisissez un graphique à afficher", general_graphs + per_min_graphs)
 
-            # Afficher les graphiques
+            # Afficher le graphique sélectionné
             if not player_data.empty:
                 if selected_graph:
                     st.subheader("Graphique sélectionné")
                     fig = plot_masculine_graph(selected_graph, selected_player, constants, data, positions)
                     if fig:
-                        st.pyplot(fig)
+                        st.plotly_chart(fig)
     else:
         st.warning("Veuillez charger un fichier Excel pour commencer.")
 
