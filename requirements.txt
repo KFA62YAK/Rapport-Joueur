@@ -8,6 +8,4 @@ fpdf
 pillow
 plotly.express
 zip.file
-io
 base64
-tempfile
