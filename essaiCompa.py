@@ -6,6 +6,9 @@ import plotly.graph_objects as go
 from PFtest import plot_feminine_graph, get_feminine_constants
 from PMtest import plot_masculine_graph, get_masculine_constants
 import os
+import tempfile
+import zipfile
+import base64
 
 # -----------------------------
 # CSS pour harmoniser l'interface
@@ -49,41 +52,101 @@ st.markdown(
 )
 
 # -----------------------------
-# Fonction de chargement d'un fichier Excel pour une colonne donnée
+# Fonction de chargement d'un fichier ZIP
 # -----------------------------
-def load_excel(key_prefix):
-    uploaded_file = st.file_uploader(
-        f"Charger un fichier Excel ({key_prefix})", 
-        type=["xls", "xlsx", "xlsm"], 
-        key=f"{key_prefix}_file_uploader"
-    )
-    if uploaded_file is not None:
+def load_zip(key_prefix):
+    """
+    Charge un fichier ZIP contenant :
+      - Un fichier Excel (avec les feuilles 'CSV', 'Poste', 'Constante')
+      - Un dossier "Trombi" avec les images des joueurs.
+    Le fichier ZIP est extrait dans un répertoire temporaire et renvoie :
+      data, positions, constante_data, base_folder
+    """
+    uploaded_zip = st.file_uploader(f"Charger un fichier ZIP ({key_prefix})", type=["zip"], key=f"{key_prefix}_zip")
+    if uploaded_zip is not None:
         try:
-            excel_data = pd.ExcelFile(uploaded_file)
+            base_folder = tempfile.mkdtemp()
+            zip_path = os.path.join(base_folder, "uploaded.zip")
+            with open(zip_path, "wb") as f:
+                f.write(uploaded_zip.getvalue())
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(base_folder)
+            # Rechercher le fichier Excel dans le ZIP
+            excel_file_path = None
+            for root, dirs, files in os.walk(base_folder):
+                for file in files:
+                    if file.lower().endswith((".xls", ".xlsx", ".xlsm")):
+                        excel_file_path = os.path.join(root, file)
+                        break
+                if excel_file_path:
+                    break
+            if not excel_file_path:
+                st.error("Aucun fichier Excel trouvé dans le ZIP.")
+                return None, None, None, None
+            excel_data = pd.ExcelFile(excel_file_path)
             required_sheets = {"CSV", "Poste", "Constante"}
-            missing_sheets = required_sheets - set(excel_data.sheet_names)
-            if missing_sheets:
-                st.error(f"Le fichier doit contenir les feuilles {', '.join(required_sheets)}. Manquantes : {', '.join(missing_sheets)}")
-                return None, None, None
+            missing = required_sheets - set(excel_data.sheet_names)
+            if missing:
+                st.error("Feuilles manquantes : " + ", ".join(missing))
+                return None, None, None, None
             data = excel_data.parse("CSV")
             positions = excel_data.parse("Poste")
             constante_data = excel_data.parse("Constante")
-            st.success("Fichier chargé avec succès")
-            st.write("Aperçu des données:")
-            st.write(data.head())
-            return data, positions, constante_data
+            st.success("Fichier ZIP chargé avec succès.")
+            return data, positions, constante_data, base_folder
         except Exception as e:
-            st.error(f"Erreur lors du chargement du fichier ({key_prefix}) : {e}")
+            st.error(f"Erreur lors du chargement du ZIP ({key_prefix}) : {e}")
+            return None, None, None, None
     else:
-        st.warning("Veuillez charger un fichier Excel.")
-    return None, None, None
+        st.info("Veuillez charger un fichier ZIP.")
+        return None, None, None, None
 
+# -----------------------------
+# Fonction pour afficher le portrait d'un joueur
+# -----------------------------
+def display_player_photo(selected_player, positions, base_folder):
+    """
+    Récupère et affiche le portrait du joueur à partir du dossier "Trombi".
+    L'image est affichée au format PNG avec transparence.
+    """
+    if "Trombi" not in positions.columns:
+        st.error("La colonne 'Trombi' n'existe pas dans la feuille Poste.")
+        return
+    selected_norm = str(selected_player).strip().lower()
+    positions["Joueur_norm"] = positions["Joueur"].astype(str).str.strip().str.lower()
+    player_row = positions[positions["Joueur_norm"] == selected_norm]
+    if player_row.empty:
+        st.warning("Aucune donnée de portrait pour ce joueur.")
+        return
+    file_name = player_row.iloc[0]["Trombi"]
+    if not file_name:
+        st.warning("Aucune photo disponible pour ce joueur.")
+        return
+    image_path = os.path.join(base_folder, "Trombi", file_name)
+    if not os.path.exists(image_path):
+        st.error(f"Le fichier image n'existe pas : {image_path}")
+        return
+    try:
+        with open(image_path, "rb") as img_file:
+            image_bytes = img_file.read()
+    except Exception as e:
+        st.error(f"Erreur lors de la lecture du fichier image : {e}")
+        return
+    base64_image = base64.b64encode(image_bytes).decode("utf-8")
+    html = f'''
+    <div style="text-align: center;">
+        <img src="data:image/png;base64,{base64_image}" alt="Portrait de {selected_player}" style="max-width:100%; height:auto;">
+    </div>
+    '''
+    st.markdown(html, unsafe_allow_html=True)
+
+# -----------------------------
+# Fonction de filtrage et de calcul additionnel (inchangé)
+# -----------------------------
 def filter_duration(player_data, min_duration=3900):
-    """Filtre les données selon la durée minimale."""
     return player_data[player_data["Durée"] >= min_duration]
 
 def compute_additional_columns(player_data):
-    """Calcule les colonnes dynamiques nécessaires pour certains graphiques."""
     if "Dist>16kmh" in player_data.columns:
         player_data["Distance > 16km/h"] = player_data["Dist>16kmh"]
     if "Dist>20kmh" in player_data.columns:
@@ -105,101 +168,11 @@ def compute_additional_columns(player_data):
     return player_data
 
 # -----------------------------
-# Fonctions de tracé
-# -----------------------------
-def plot_masculine_graph(selected_graph, player_name, constants, data, positions):
-    """Trace les graphiques masculins pour un joueur donné en utilisant Plotly."""
-    player_data = data[data["Joueur"] == player_name].copy()
-    player_data = compute_additional_columns(player_data)
-    # Diagramme empilé
-    if selected_graph == "Diagramme empilé":
-        if all(col in data.columns for col in ["Distance16%", "Distance20%", "Distance%"]):
-            sessions = data["Session Title"].fillna("Session inconnue")
-            distance16 = data["Distance16%"].fillna(0)
-            distance20 = data["Distance20%"].fillna(0)
-            distance = data["Distance%"].fillna(0)
-            position_row = positions[positions["Joueur"] == player_name]
-            if not position_row.empty:
-                position = position_row.iloc[0]["Poste"]
-                constant20 = constants.get("Distance20%", {}).get(position, 0)
-                constant16 = constants.get("Distance16%", {}).get(position, 0)
-                constant = constants.get("Distance%", {}).get(position, 0)
-                df_constante = pd.DataFrame({
-                    'Session': ['Constante U15']*3,
-                    'Type': ['Distance>20', 'Distance>16', 'Distance<16'],
-                    'Valeur': [constant20, constant16, constant]
-                })
-                df_sessions = pd.DataFrame({
-                    'Session': sessions,
-                    'Distance>20': distance20,
-                    'Distance>16': distance16,
-                    'Distance<16': distance
-                })
-                df_sessions_long = df_sessions.melt(id_vars="Session", value_vars=['Distance>20', 'Distance>16', 'Distance<16'],
-                                                      var_name='Type', value_name='Valeur')
-                df_combined = pd.concat([df_constante, df_sessions_long], ignore_index=True)
-                fig = px.bar(df_combined, x='Session', y='Valeur', color='Type', barmode='stack', text_auto=True,
-                             title="Répartition de courses en %")
-                fig.update_layout(xaxis_title="Match", yaxis_title="Distance (%)", xaxis_tickangle=45)
-                return fig
-        else:
-            st.warning("Les colonnes Distance16%, Distance20% et Distance% sont manquantes.")
-            return None
-    # Graphiques en courbe (avec régression et ligne constante)
-    if selected_graph in player_data.columns:
-        player_data[selected_graph] = player_data[selected_graph].fillna(0)
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=player_data["Session Title"],
-            y=player_data[selected_graph],
-            mode="lines+markers",
-            name=selected_graph,
-            line=dict(color="blue")
-        ))
-        x = np.arange(len(player_data["Session Title"]))
-        y = player_data[selected_graph].values
-        slope, intercept = np.polyfit(x, y, 1)
-        regression_line = slope * x + intercept
-        fig.add_trace(go.Scatter(
-            x=player_data["Session Title"],
-            y=regression_line,
-            mode="lines",
-            name="Progression générale",
-            line=dict(color="navy")
-        ))
-        position_row = positions[positions["Joueur"] == player_name]
-        if not position_row.empty:
-            position = position_row.iloc[0]["Poste"]
-            constant_val = constants.get(selected_graph, {}).get(position)
-            if constant_val is not None:
-                fig.add_trace(go.Scatter(
-                    x=[player_data["Session Title"].iloc[0], player_data["Session Title"].iloc[-1]],
-                    y=[constant_val, constant_val],
-                    mode="lines",
-                    name="U15 National",
-                    line=dict(color="red", dash="dash")
-                ))
-        fig.update_layout(
-            title=f"{selected_graph} - {player_name}",
-            xaxis_title="Session",
-            yaxis_title="Valeur",
-            xaxis_tickangle=45
-        )
-        return fig
-    else:
-        st.warning(f"Données manquantes pour le graphique : {selected_graph}")
-        return None
-
-def plot_feminine_graph(selected_graph, player_name, constants, data, positions):
-    """Trace les graphiques pour le pôle féminin en utilisant Plotly (similaire à la logique masculine)."""
-    return plot_masculine_graph(selected_graph, player_name, constants, data, positions)
-
-# -----------------------------
-# Affichage en deux colonnes pour la comparaison
+# Fonction d'affichage pour la comparaison en colonnes
 # -----------------------------
 def display_column_comparison(key_prefix, shared_graphs):
-    # Chaque colonne charge son fichier Excel dans son bloc de mise en forme
-    data, positions, constante_data = load_excel(key_prefix)
+    # Charge le fichier ZIP pour la colonne
+    data, positions, constante_data, base_folder = load_zip(key_prefix)
     if data is not None:
         st.write(f"Sélectionner un joueur ({key_prefix}):")
         players = data["Joueur"].drop_duplicates().tolist()
@@ -214,6 +187,9 @@ def display_column_comparison(key_prefix, shared_graphs):
         else:
             constants = get_masculine_constants(constante_data)
         if selected_player:
+            st.markdown(f"**{selected_player}**")
+            # Afficher le portrait du joueur sous le selectbox
+            display_player_photo(selected_player, positions, base_folder)
             st.write(f"Graphiques pour {selected_player} ({global_module}):")
             filter_matches = st.checkbox(
                 f"Afficher les matchs < 3900 secondes ({key_prefix})",
@@ -239,7 +215,7 @@ def display_column_comparison(key_prefix, shared_graphs):
                         else:
                             st.error(f"Graphique {graph} non disponible.")
     else:
-        st.warning(f"Veuillez charger un fichier Excel pour {key_prefix}.")
+        st.warning(f"Veuillez charger un fichier ZIP pour {key_prefix}.")
 
 # -----------------------------
 # Configuration globale dans la sidebar
@@ -275,6 +251,7 @@ with st.sidebar.expander("⚙️ Configuration des graphiques", expanded=True):
             "Diagramme empilé"
         ]
         per_min_graphs = [
+            "Dist/min",
             "Distance>20kmh/min",
             "Distance>16kmh/min",
             "Nb Acc/Dec > 2m/s²/min",
@@ -282,20 +259,12 @@ with st.sidebar.expander("⚙️ Configuration des graphiques", expanded=True):
         ]
     select_all_general = st.checkbox("Sélectionner tous les graphiques généraux")
     select_all_per_min = st.checkbox("Sélectionner tous les graphiques par minute")
-    shared_general_graphs = st.multiselect(
-        "Choisir les graphiques généraux", 
-        general_graphs, 
-        default=general_graphs if select_all_general else []
-    )
-    shared_per_min_graphs = st.multiselect(
-        "Choisir les graphiques par minute", 
-        per_min_graphs, 
-        default=per_min_graphs if select_all_per_min else []
-    )
+    shared_general_graphs = st.multiselect("Choisir les graphiques généraux", general_graphs, default=general_graphs if select_all_general else [])
+    shared_per_min_graphs = st.multiselect("Choisir les graphiques par minute", per_min_graphs, default=per_min_graphs if select_all_per_min else [])
 shared_graphs = shared_general_graphs + shared_per_min_graphs
 
 # -----------------------------
-# Comparaison en deux colonnes avec chargement de fichiers distincts
+# Affichage en deux colonnes pour la comparaison
 # -----------------------------
 col1, col2 = st.columns(2)
 with col1:
