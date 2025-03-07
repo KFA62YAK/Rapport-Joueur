@@ -75,7 +75,7 @@ def get_base64(file_path):
         return base64.b64encode(f.read()).decode()
 
 # Chemin complet vers l'image (vérifiez le chemin et l'extension)
-image_path = r"C:\Users\cheva\Downloads\IMFD.jpg"
+image_path = r"IMFD.jpg"
 img_base64 = ""
 if os.path.exists(image_path):
     img_base64 = get_base64(image_path)
