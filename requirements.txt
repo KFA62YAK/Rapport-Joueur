@@ -7,4 +7,3 @@ Pillow
 scipy
 openpyxl
 xlrd
-zipfile
