@@ -8,3 +8,13 @@ Pillow
 scipy
 openpyxl
 xlrd
+streamlit==1.42.0
+pandas==2.2.3
+numpy==1.26.0
+plotly==5.15.0
+fpdf==1.7.2
+pillow==11.1.0
+scipy==1.15.2
+openpyxl==3.1.5
+xlrd==2.0.1
+kaleido
